@@ -9,9 +9,14 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
+        if (!Auth::check()) {
+            return redirect()->route('auth.phone');
+        }
+
         if (!Auth::user()->is_admin) {
             abort(403, 'Unauthorized');
         }
+        
         return $next($request);
     }
 }

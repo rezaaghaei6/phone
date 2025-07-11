@@ -42,4 +42,12 @@ class SmsService
         // Simulate SMS sending (replace with actual SMS provider)
         Log::info("Sending SMS to $phone: Your verification code is $code");
     }
+
+    /**
+     * متد جدید برای سازگاری با کدهای موجود
+     */
+    public function sendCode($phone)
+    {
+        return $this->sendVerificationCode($phone);
+    }
 }

@@ -6,6 +6,18 @@ use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Helpers\PhoneHelper;
 
+class DatabaseSeeder extends Seeder
+{
+    /**
+     * Seed the application's database.
+     */
+    public function run(): void
+    {
+        // Call the AdminUserSeeder
+        $this->call(AdminUserSeeder::class);
+    }
+}
+
 class AdminUserSeeder extends Seeder
 {
     /**
@@ -16,8 +28,8 @@ class AdminUserSeeder extends Seeder
     public function run()
     {
         try {
-            // Normalize phone number to ensure +98 format
-            $phone = PhoneHelper::normalizePhone('+989123456789');
+            // Normalize phone number to ensure correct format
+            $phone = PhoneHelper::normalize('+989123456789');
 
             // Create or update admin user
             User::updateOrCreate(
@@ -30,9 +42,12 @@ class AdminUserSeeder extends Seeder
                     'updated_at' => now(),
                 ]
             );
+
+            $this->command->info('Admin user created successfully with phone: ' . $phone);
         } catch (\Exception $e) {
             // Log error if phone normalization fails
             \Log::error('Failed to create admin user: ' . $e->getMessage());
+            $this->command->error('Failed to create admin user: ' . $e->getMessage());
         }
     }
 }

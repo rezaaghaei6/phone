@@ -19,8 +19,14 @@ class AuthController extends Controller
     public function sendCode(Request $request, SmsService $smsService)
     {
         $request->validate(['phone' => 'required|string']);
+        
         try {
-            $phone = PhoneHelper::normalizePhone($request->input('phone'));
+            $phone = PhoneHelper::normalize($request->input('phone'));
+            
+            if (!PhoneHelper::isValid($phone)) {
+                return redirect()->back()->withErrors(['phone' => 'شماره موبایل معتبر نیست']);
+            }
+            
             $smsService->sendCode($phone);
             session(['phone' => $phone]);
             return redirect()->route('auth.verify');
@@ -31,6 +37,9 @@ class AuthController extends Controller
 
     public function showVerifyForm()
     {
+        if (!session('phone')) {
+            return redirect()->route('auth.phone');
+        }
         return view('auth.verify');
     }
 
@@ -40,6 +49,10 @@ class AuthController extends Controller
         $phone = session('phone');
         $code = $request->input('code');
 
+        if (!$phone) {
+            return redirect()->route('auth.phone');
+        }
+
         $verification = VerificationCode::where('phone', $phone)
             ->where('code', $code)
             ->where('is_valid', true)
@@ -47,14 +60,11 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
-            return redirect()->back()->withErrors(['code' => 'Invalid or expired code']);
+            return redirect()->back()->withErrors(['code' => 'کد نامعتبر یا منقضی شده است']);
         }
 
-        // Invalidate code after 1 minute
-        if (now()->diffInMinutes($verification->created_at) >= config('app.code_expiry_minutes', 1)) {
-            $verification->update(['is_valid' => false]);
-            return redirect()->back()->withErrors(['code' => 'Code has expired']);
-        }
+        // Invalidate code after use
+        $verification->update(['is_valid' => false]);
 
         $user = User::where('phone', $phone)->first();
         if (!$user) {
@@ -63,12 +73,15 @@ class AuthController extends Controller
         }
 
         Auth::login($user);
-        $verification->update(['is_valid' => false]);
+        session()->forget('phone');
         return redirect()->route('dashboard');
     }
 
     public function showRegisterForm()
     {
+        if (!session('phone')) {
+            return redirect()->route('auth.phone');
+        }
         return view('auth.register');
     }
 
@@ -80,6 +93,10 @@ class AuthController extends Controller
         ]);
 
         $phone = session('phone');
+        if (!$phone) {
+            return redirect()->route('auth.phone');
+        }
+
         $user = User::create([
             'phone' => $phone,
             'name' => $request->input('name'),
@@ -88,6 +105,13 @@ class AuthController extends Controller
         ]);
 
         Auth::login($user);
+        session()->forget('phone');
         return redirect()->route('dashboard');
+    }
+
+    public function logout()
+    {
+        Auth::logout();
+        return redirect()->route('auth.phone');
     }
 }

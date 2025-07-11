@@ -123,4 +123,18 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | SMS Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control SMS verification code behavior
+    |
+    */
+
+    'sms_daily_limit' => env('SMS_DAILY_LIMIT', 5),
+    'sms_cooldown_minutes' => env('SMS_COOLDOWN_MINUTES', 2),
+    'code_validity_minutes' => env('CODE_VALIDITY_MINUTES', 2),
+    'code_expiry_minutes' => env('CODE_EXPIRY_MINUTES', 1),
+
 ];

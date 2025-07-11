@@ -25,6 +25,14 @@ class PhoneHelper
     }
 
     /**
+     * متد جدید برای سازگاری با کدهای موجود
+     */
+    public static function normalizePhone($phone)
+    {
+        return self::normalize($phone);
+    }
+
+    /**
      * بررسی معتبر بودن شماره موبایل ایران
      */
     public static function isValid($phone)
