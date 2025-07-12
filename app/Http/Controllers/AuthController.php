@@ -18,7 +18,14 @@ class AuthController extends Controller
 
     public function sendCode(Request $request, SmsService $smsService)
     {
-        $request->validate(['phone' => 'required|string']);
+        $request->validate([
+            'phone' => 'required|string',
+            'captcha' => 'required|captcha'
+        ], [
+            'phone.required' => 'شماره موبایل الزامی است',
+            'captcha.required' => 'لطفاً کپچا را وارد کنید',
+            'captcha.captcha' => 'کپچا نادرست است'
+        ]);
         
         try {
             $phone = PhoneHelper::normalize($request->input('phone'));
@@ -29,7 +36,8 @@ class AuthController extends Controller
             
             $smsService->sendCode($phone);
             session(['phone' => $phone]);
-            return redirect()->route('auth.verify');
+            
+            return redirect()->route('auth.verify')->with('success', 'کد تایید برای شما ارسال شد');
         } catch (\Exception $e) {
             return redirect()->back()->withErrors(['phone' => $e->getMessage()]);
         }
@@ -45,7 +53,16 @@ class AuthController extends Controller
 
     public function verifyCode(Request $request)
     {
-        $request->validate(['code' => 'required|digits:6']);
+        $request->validate([
+            'code' => 'required|digits:6',
+            'captcha' => 'required|captcha'
+        ], [
+            'code.required' => 'کد تایید الزامی است',
+            'code.digits' => 'کد تایید باید 6 رقم باشد',
+            'captcha.required' => 'لطفاً کپچا را وارد کنید',
+            'captcha.captcha' => 'کپچا نادرست است'
+        ]);
+        
         $phone = session('phone');
         $code = $request->input('code');
 
@@ -63,7 +80,7 @@ class AuthController extends Controller
             return redirect()->back()->withErrors(['code' => 'کد نامعتبر یا منقضی شده است']);
         }
 
-        // Invalidate code after use
+        // غیرفعال کردن کد پس از استفاده
         $verification->update(['is_valid' => false]);
 
         $user = User::where('phone', $phone)->first();
@@ -90,6 +107,9 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'surname' => 'required|string|max:255',
+        ], [
+            'name.required' => 'نام الزامی است',
+            'surname.required' => 'نام خانوادگی الزامی است'
         ]);
 
         $phone = session('phone');

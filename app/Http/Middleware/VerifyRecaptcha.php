@@ -4,7 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 use App\Models\RecaptchaLog;
 use Illuminate\Support\Facades\Log;
 
@@ -12,71 +12,47 @@ class VerifyRecaptcha
 {
     public function handle(Request $request, Closure $next)
     {
-        // اگر در محیط development هستیم و کلیدهای reCAPTCHA تنظیم نشده
-        if (app()->environment('local') && (!config('services.recaptcha.site_key') || !config('services.recaptcha.secret_key'))) {
-            Log::warning('reCAPTCHA keys not configured in local environment, skipping verification');
+        // در محیط local اگر کپچا وارد نشده باشد، کنترل نکنیم
+        if (app()->environment('local') && !$request->filled('captcha')) {
+            Log::warning('Captcha not provided in local environment, skipping verification');
             return $next($request);
         }
 
-        $token = $request->input('recaptcha_token');
-
-        if (!$token) {
-            Log::error('reCAPTCHA token not provided');
-            return back()->withErrors(['recaptcha' => 'خطا در اعتبارسنجی reCAPTCHA - توکن موجود نیست']);
+        // بررسی وجود کپچا در درخواست
+        $captcha = $request->input('captcha');
+        
+        if (!$captcha) {
+            Log::error('Captcha not provided');
+            return back()->withErrors(['captcha' => 'لطفاً کپچا را وارد کنید']);
         }
 
-        $secretKey = config('services.recaptcha.secret_key');
-        if (!$secretKey) {
-            Log::error('reCAPTCHA secret key not configured');
-            return back()->withErrors(['recaptcha' => 'خطا در تنظیمات reCAPTCHA']);
+        // بررسی صحت کپچا
+        $validator = Validator::make($request->all(), [
+            'captcha' => 'required|captcha'
+        ], [
+            'captcha.required' => 'لطفاً کپچا را وارد کنید',
+            'captcha.captcha' => 'کپچا نادرست است'
+        ]);
+
+        if ($validator->fails()) {
+            Log::warning('Captcha validation failed', [
+                'captcha' => $captcha,
+                'ip' => $request->ip()
+            ]);
+            
+            return back()->withErrors($validator);
         }
 
         try {
-            $response = Http::timeout(10)->asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-                'secret'   => $secretKey,
-                'response' => $token,
-                'remoteip' => $request->ip(),
+            // لاگ کپچا
+            RecaptchaLog::create([
+                'phone' => $request->input('phone'),
+                'ip_address' => $request->ip(),
+                'recaptcha_token' => substr($captcha, 0, 50), // فقط 50 کاراکتر اول
+                'recaptcha_score' => 1, // برای کپچای معمولی، امتیاز 1 قرار می‌دهیم
             ]);
-
-            if (!$response->successful()) {
-                Log::error('reCAPTCHA API request failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
-                ]);
-                return back()->withErrors(['recaptcha' => 'خطا در ارتباط با سرویس reCAPTCHA']);
-            }
-
-            $result = $response->json();
-            
-            Log::info('reCAPTCHA verification result', $result);
-
-            // Log the reCAPTCHA attempt
-            try {
-                RecaptchaLog::create([
-                    'phone' => $request->input('phone'),
-                    'ip_address' => $request->ip(),
-                    'recaptcha_token' => substr($token, 0, 50), // فقط 50 کاراکتر اول را ذخیره کن
-                    'recaptcha_score' => $result['score'] ?? 0,
-                ]);
-            } catch (\Exception $logError) {
-                Log::error('Failed to log reCAPTCHA attempt: ' . $logError->getMessage());
-            }
-
-            if (!$result['success']) {
-                $errors = $result['error-codes'] ?? [];
-                Log::error('reCAPTCHA verification failed', ['errors' => $errors]);
-                return back()->withErrors(['recaptcha' => 'اعتبارسنجی reCAPTCHA ناموفق بود']);
-            }
-
-            $score = $result['score'] ?? 0;
-            if ($score < 0.5) {
-                Log::warning('reCAPTCHA score too low', ['score' => $score]);
-                return back()->withErrors(['recaptcha' => 'امتیاز reCAPTCHA پایین است']);
-            }
-
-        } catch (\Exception $e) {
-            Log::error('reCAPTCHA verification exception: ' . $e->getMessage());
-            return back()->withErrors(['recaptcha' => 'خطا در اعتبارسنجی reCAPTCHA']);
+        } catch (\Exception $logError) {
+            Log::error('Failed to log captcha attempt: ' . $logError->getMessage());
         }
 
         return $next($request);
